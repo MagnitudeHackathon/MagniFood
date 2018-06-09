@@ -155,7 +155,6 @@ def getCafeteria(request, cafeteriaId):
     }
     return JsonResponse(response, status=200, safe=False)
 
-
 @csrf_exempt
 def getCafes(request):    
     cafes = Cafe.objects.all()
