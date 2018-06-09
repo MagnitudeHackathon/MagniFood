@@ -15,9 +15,12 @@ class UserAdmin(admin.ModelAdmin):
     list_filter = ["is_active", "is_staff"]
     list_editable = ["is_active", "is_staff"]
 
+admin.site.register(Address)
+admin.site.register(Cafeteria)
+admin.site.register(Cafe)
+admin.site.register(Company)
 admin.site.unregister(User)
 admin.site.register(User, UserAdmin)
-admin.site.register(FoodItem)
 admin.site.register(Category)
-admin.site.register(Cart)
+admin.site.register(FoodItem)
 admin.site.register(Order)

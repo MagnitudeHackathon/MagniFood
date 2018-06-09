@@ -30,8 +30,8 @@ def login_view(request):
     if user is not None:
         request.session['username'] = username
         response = {
-            "status":"success",
-            "id":user.pk,
+            "status": "success",
+            "id": user.pk,
             "userType": user.profile.user_type
         }
         return JsonResponse(response, status=200)
@@ -65,11 +65,19 @@ def signup_view(request):
         employeeId = data['employeeId']
         contactNumber = int(data['contactNumber'])
         
-        block = data['block']
-        floor = data['floor']
-        company = data['company']
+        
+        workplace = data['workplace']
+        
+
 
         user_type = int(data['userType'])
+
+        if(user_type == 1):
+            workplace = Cafe.objects.get(pk=int(data["workplace"]))
+        elif(user_type == 2):
+            workplace = Company.objects.get(pk=int(data["workplace"]))
+        elif(user_type == 3):
+            workplace = Cafeteria.objects.get(pk=int(data["workplace"]))
 
         user = User(username=username,
                      
@@ -102,9 +110,7 @@ def signup_view(request):
             profile = Profile(
                 user = user,
                 user_type=user_type,
-                block=block,
-                floor=floor,
-                company=company,
+                workplace = workplace,
                 contactNumber=contactNumber,
                 employeeId = employeeId,
             )
@@ -131,7 +137,8 @@ def getItems(request):
             "price": each.price,
             "description": each.description,
             "category": each.category.name,
-            "foodJoint": each.foodJoint.first_name + " "+  each.foodJoint.last_name
+            "cafe": each.cafe.name,
+            "cafeteria": each.cafe.cafeteria.name,
         }
         items_data.append(data)
 
@@ -151,24 +158,32 @@ def getItem(request, itemId):
         "price": foodItem.price,
         "description": foodItem.description,
         "category": foodItem.category.name,
-        "foodJoint": foodItem.foodJoint.first_name + " "+  foodItem.foodJoint.last_name
+        "cafe": foodItem.cafe.name,
+        "cafeteria": foodItem.cafe.cafeteria.name,
     }
 
     return JsonResponse(response, status=200, safe=False)
 
 @csrf_exempt
-def addItem(request, sellerId):
-    user = User.objects.get(pk=sellerId)
-    
-    data = json.loads(request.body)
-    room = FoodItem(
-                name=data["name"],
-                cost=data["cost"],
-                description=data["description"],
-                seller=user
-            )
-    room.save()
-    return JsonResponse({"message": "Room Added Successfully"}, status=200)
+def addItem(request):
+    cafeUser = User.objects.get(username=request.session['username'])
+    cafeUserProfile = Profile.objects.get(user = cafeUser)
+    if(cafeUserProfile.user_type == 1):
+        cafe = cafeUserProfile.workplace
+        data = json.loads(request.body)
+        foodItem = FoodItem(
+                    name=data["name"],
+                    price=data["price"],
+                    availableQuantity = data["availableQuantity"],
+                    description=data["description"],
+                    category = data["category"],
+                    cafe=cafe,
+                )
+        foodItem.save()
+        return JsonResponse({"status": "FoodItem Added Successfully", "foodItemId": foodItem.pk}, status=200)
+    else:
+        return JsonResponse({"status": "You dont have required permissions."}, status=200)  
+
 
 @csrf_exempt
 def orderItems(request):
@@ -179,7 +194,7 @@ def orderItems(request):
 
     if(customerProfile.user_type == 2):
         data = json.loads(request.body)
-        foodJoint = User.objects.get(pk=int(data["cafe"]))
+        cafe = Cafe.objects.get(pk=int(data["cafe"]))
         note = data["note"]
         items = data["items"]
         foodItems = []
@@ -198,7 +213,7 @@ def orderItems(request):
         
         order = Order(
                         customer = customer,
-                        foodJoint = foodJoint,
+                        cafe = cafe,
                         note = note,
                         price = price,
                     )
