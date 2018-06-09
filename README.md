@@ -1,2 +1,8 @@
-# Hack101
-Hack101
+#Hackathon
+
+#Phase 1:
+  Signup
+  Singin
+  GetItems
+  GetItems by Id
+  
