@@ -26,8 +26,9 @@ def login_view(request):
     username = data["username"]
     password = data["password"]
     user = authenticate(username=username, password=password)
-    print (username, password)
+    print (username, password, user)
     if user is not None:
+        request.session['username'] = username
         response = {
             "status":"success",
             "id":user.pk,
@@ -42,6 +43,10 @@ def login_view(request):
 
 @csrf_exempt
 def logout_view(request):
+    try:
+      del request.session['username']
+    except:
+        pass
     logout(request)
     return JsonResponse({'error':False})
 
@@ -53,144 +58,110 @@ def signup_view(request):
         data = json.loads(request.body.decode())
         username = data['username']
         password = data['password']
-        name = data['name']
-        phone = int(data['phone'])
-        address = data['address']
+        
+        first_name = data['first_name']
+        last_name = data['last_name']
+        email = data['email']
+        employeeId = data['employeeId']
+        contactNumber = int(data['contactNumber'])
+        
+        block = data['block']
+        floor = data['floor']
+        company = data['company']
+
         user_type = int(data['userType'])
-        sex  = int(data['sex'])
 
-        user = User(username=username, is_active=True)
-    try:
-        user.save()
-    except:
-        user = User.objects.get(username=username)
-        try:
-            Profile.objects.get(user=user)
-        except:
-            response = {
-            "id":user.pk,
-            "status":"exists_but_no_profile",
-            }
-        else:
-            response = {
-            "status":"exists",
-            "id":user.pk,
-            "name": profile.name,
-            }
-        return JsonResponse(response, status=400)
-    else:
-        profile = Profile(
-            user=user, 
-            name=name,
-            contactNumber=phone,
-            address=address,
-            user_type=user_type,
-            sex=sex,
-        )
-        profile.save()
-        response = {
-            "status":"succesfull",
-            "id":user.pk,
-            "name": profile.name,
-        }
+        user = User(username=username,
+                     
+                    first_name = first_name, 
+                    last_name = last_name, 
+                    email = email,
+                    is_active=True,
+                )
         user.set_password(password)
-        user.save()
-        return JsonResponse(response, status=200)
-
-@csrf_exempt
-def editUser_view(request):
-    if request.method == 'POST':
-        data = json.loads(request.body.decode())
-        # print("data=", data)
-        username = data['username']
-        password = data['password']
-
-        name = data['name']
-        age = int(data['age'])
-        phone = int(data['phone'])
-        address = data['address']
-        od = float(data['od'])
-        os = float(data['os'])
-        va = float(data['va'])
-
-        user = authenticate(request, username=username, password=password)
-        if user is not None:
-            pgOwner = PgOwners.objects.get(user=user)
-            profile = Profile.objects.get(user = user)
-            profile.name = name
-            profile.age = age
-            profile.phone = phone
-            profile.address = address
-            profile.od = od
-            profile.os = os
-            profile.va = va
+        try:
+            user.save()
+        except:
+            user = User.objects.get(username=username)
+            try:
+                Profile.objects.get(user=user)
+            except:
+                response = {
+                "id":user.pk,
+                "name": user.first_name + user.last_name,
+                "status":"User with no profile",
+                }
+            else:
+                response = {
+                    "status":"User exists",
+                    "id":user.pk,
+                    "name": user.first_name + user.last_name
+                }
+            return JsonResponse(response, status=400)
+        else:
+            profile = Profile(
+                user = user,
+                user_type=user_type,
+                block=block,
+                floor=floor,
+                company=company,
+                contactNumber=contactNumber,
+                employeeId = employeeId,
+            )
             profile.save()
-
-            return JsonResponse({'msg':"User updated successfully", 'error':False})
-    else:
-        return JsonResponse({'msg':"Page doesn't exists.", 'error':True})
-
-
-@csrf_exempt
-def getProfile(request, user_id):
-    user = User.objects.get(pk=user_id)
-    if user:
-        profile = Profile.objects.get(user=user)
-        if profile.photo:
-            imageUrl = profile.photo.url
-        else:
-            imageUrl = "None"
-        
-        if profile.aadharCard:
-            aadharCardUrl = profile.aadharCard.url
-        else:
-            aadharCardUrl = "None"
-        
-        response = {
-            "userId":user_id,
-            "username":user.username,
-            "profileId": profile.id,
-            "name": profile.name,
-            "contactNumber": profile.contactNumber,
-            "address": profile.address,
-            "dob": profile.dob,
-            "photo": imageUrl,
-            "aadharCard": aadharCardUrl,
-            "sex": profile.sex,
-        }
-        return JsonResponse(response, status=200)
-    else:
-        response = {"User not found, wrong id"}
-        return JsonResponse(response, status=404)
+            response = {
+                "status":"succesful",
+                "id":user.pk,
+                "name": user.first_name + user.last_name,
+            }
+            user.set_password(password)
+            user.save()
+            return JsonResponse(response, status=200)
 
 @csrf_exempt
-def getProducts(request):
-    products = Products.objects.all()
-    products_data = []
-    for each in products:
-        print("each.costingType:", each.costingType)
+def getItems(request):
+    # foodJoint = User.objects.get(username=request.session['username'])
+    
+    foodItems = FoodItem.objects.all()
+    items_data = []
+    for each in foodItems:
         data = {
+            "itemId": each.pk,
             "name": each.name,
-            "cost": each.cost,
-            "costingType": COSTING_CHOICS[int(each.costingType)][1],
+            "price": each.price,
             "description": each.description,
-            "seller": each.seller.profile.name
+            "category": each.category.name,
+            "foodJoint": each.foodJoint.first_name + " "+  each.foodJoint.last_name
         }
-        products_data.append(data)
+        items_data.append(data)
 
     response = {
-        "products": products_data,
+        "items": items_data,
     }
-    print(response)
+
+    return JsonResponse(response, status=200, safe=False)
+
+
+@csrf_exempt
+def getItem(request, itemId):
+    foodItem = FoodItem.objects.get(pk=itemId)
+    response = {
+        "itemId": foodItem.pk,
+        "name": foodItem.name,
+        "price": foodItem.price,
+        "description": foodItem.description,
+        "category": foodItem.category.name,
+        "foodJoint": foodItem.foodJoint.first_name + " "+  foodItem.foodJoint.last_name
+    }
 
     return JsonResponse(response, status=200, safe=False)
 
 @csrf_exempt
-def addProduct(request, sellerId):
+def addItem(request, sellerId):
     user = User.objects.get(pk=sellerId)
     
     data = json.loads(request.body)
-    room = Products(
+    room = FoodItem(
                 name=data["name"],
                 cost=data["cost"],
                 description=data["description"],
@@ -198,3 +169,43 @@ def addProduct(request, sellerId):
             )
     room.save()
     return JsonResponse({"message": "Room Added Successfully"}, status=200)
+
+@csrf_exempt
+def orderItems(request):
+
+    
+    customer = User.objects.get(username=request.session['username'])
+    customerProfile = Profile.objects.get(user=customer)
+
+    if(customerProfile.user_type == 2):
+        data = json.loads(request.body)
+        foodJoint = User.objects.get(pk=int(data["cafe"]))
+        note = data["note"]
+        items = data["items"]
+        foodItems = []
+        price = 0
+        for each in items:
+            foodItem = FoodItem.objects.get(pk=each["id"])
+            if foodItem is not None:
+                quantity = int(each["quantity"])
+                if (quantity > foodItem.availableQuantity):
+                    return JsonResponse({"status": foodItem.name + "quantity required is not available."}, status=200)
+                price = price + quantity * foodItem.price
+                foodItems.append(foodItem)
+
+            else:
+                return JsonResponse({"status": "Food Item(s) Doesn't Exists"}, status=200)
+        
+        order = Order(
+                        customer = customer,
+                        foodJoint = foodJoint,
+                        note = note,
+                        price = price,
+                    )
+        order.save()
+        order.foodItems.add(*foodItems)
+        return JsonResponse({"status": "Items Ordered Successfully", "orderId": order.pk, "orderPrice": price}, status=200)
+    else:
+        return JsonResponse({"status": "You dont have required permissions."}, status=200)  
+    
+    
