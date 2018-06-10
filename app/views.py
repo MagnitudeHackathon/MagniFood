@@ -663,6 +663,84 @@ def addIngredient(request):
                 )
         ingredients.save()
 
+        foodItems = FoodItem.objects.all()
+        for foodItem in foodItems:
+            try:
+                ingridientDetail = IngridientDetail.objects.get(foodItem = foodItem, ingredient = ingredient)
+            
+                quantity = ingridientDetail.quantity
+                if(quantity <= ingredients.availableQuantity):
+                    foodItem.available = True
+                else:
+                    foodItem.available = False
+                foodItem.save()
+            except:
+                continue
+
         return JsonResponse({"status": "Ingredient Added Successfully", "ingredientsId": ingredients.pk, "ingredientsName": ingredients.name}, status=200)
     else:
         return JsonResponse({"status": "You dont have required permissions."}, status=200)  
+
+@csrf_exempt
+def getIngredients(request):
+    try: 
+        user = User.objects.get(username=request.session['username'])
+    except:
+        return JsonResponse({"status": "Invalid Session."}, status=200) 
+    userProfile = Profile.objects.get(user = user)
+    if(userProfile.user_type == 1 or userProfile.user_type == 3):
+        ingredients = Ingredients.objects.all()
+        ingredients_data = []
+        for each in ingredients:
+            data = {
+                "id": each.pk,
+                "name": each.name,
+                "quantity_type": QUANTITY_TYPES[int(each.quantity_type)-1][1],
+                "availableQuantity": each.availableQuantity,
+                "storeHouse": each.storeHouse.name,
+            }
+            ingredients_data.append(data)
+
+        response = {
+            "ingredients": ingredients_data,
+            "count": len(ingredients)
+        }
+        return JsonResponse(response, status=200, safe=False)
+    else:
+        return JsonResponse({"status": "You dont have required permissions."}, status=200)
+
+@csrf_exempt
+def updateIngredients(request): 
+    try: 
+        user = User.objects.get(username=request.session['username'])
+    except:
+        return JsonResponse({"status": "Invalid Session."}, status=200) 
+    userProfile = Profile.objects.get(user = user)
+    if(userProfile.user_type == 1 or userProfile.user_type == 3):
+        data = json.loads(request.body)
+        try:
+            ingredient = Ingredients.objects.get(pk=int(data["ingredient"]))
+        except:
+            return JsonResponse({"status": "Ingredient Doesn't Exists"}, status=200)
+        
+        ingredient.name = data["name"]
+        ingredient.quantity_type = data["quantity_type"]
+        ingredient.availableQuantity = data["availableQuantity"]
+        foodItems = FoodItem.objects.all()
+        for foodItem in foodItems:
+            try:
+                ingridientDetail = IngridientDetail.objects.get(foodItem = foodItem, ingredient = ingredient)
+            
+                quantity = ingridientDetail.quantity
+                if(quantity <= data["availableQuantity"]):
+                    foodItem.available = True
+                else:
+                    foodItem.available = False
+                foodItem.save()
+            except:
+                continue
+        ingredient.description = data["description"]
+        ingredient.save()
+        return JsonResponse({"status": "ingredient Updated Successfully",}, status=200)
+    else:
+        return JsonResponse({"status": "You dont have required permissions."}, status=200)

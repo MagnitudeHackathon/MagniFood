@@ -28,6 +28,8 @@ urlpatterns = [
 
 
     url(r'^addIngredient/$', views.addIngredient, name="addIngredient"),
+    url(r'^getIngredients/$', views.getIngredients, name="getIngredients"),
+    url(r'^updateIngredients/$', views.updateIngredients, name="updateIngredients"),
 
     url(r'^addItem/$', views.addItem, name="addItem"),
     url(r'^removeItem/$', views.removeItem, name="removeItem"),
