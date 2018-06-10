@@ -27,6 +27,8 @@ urlpatterns = [
     url(r'^getCompany/(?P<companyId>\d+)/$', views.getCompany, name="getCompany"),
 
 
+    url(r'^addIngredient/$', views.addIngredient, name="addIngredient"),
+
     url(r'^addItem/$', views.addItem, name="addItem"),
     url(r'^removeItem/$', views.removeItem, name="removeItem"),
     url(r'^updateItem/$', views.updateItem, name="updateItem"),

@@ -27,21 +27,49 @@ def login_view(request):
     data = json.loads(request.body)
     username = data["username"]
     password = data["password"]
+    
     user = authenticate(username=username, password=password)
-    print (username, password, user)
+    if user is None:
+        response = {"status":"Invalid username or password"}
+        return JsonResponse(response, status=200)
+
+    try:
+        profile = Profile.objects.get(user=user)
+    except:
+        return JsonResponse({"status":"No Profile Exists"}, status=200)
+
     if user is not None:
         request.session['username'] = username
-        response = {
-            "status": "success",
-            "id": user.pk,
-            "userType": user.profile.user_type
-        }
+        if(profile.user_type == 2):
+            foodItems = FoodItem.objects.all()
+            items_data = []
+            for each in foodItems:
+                data = {
+                    "itemId": each.pk,
+                    "name": each.name,
+                    "price": each.price,
+                    "description": each.description,
+                    "category": each.category.name,
+                    "cafe": each.cafe.name,
+                    "cafeteria": each.cafe.cafeteria.name,
+                    "available": each.available,
+                }
+                items_data.append(data)
+
+            response = {
+                "items": items_data,
+                "status": "login successful",
+                "id": user.pk,
+                "userType": user.profile.user_type
+            }
+        else:
+            response = {
+                "status": "success",
+                "id": user.pk,
+                "userType": user.profile.user_type
+            }
         return JsonResponse(response, status=200)
-    else:
-        response = {
-            "status":"failed",
-        }
-        return JsonResponse(response, status=400)
+        
 
 @csrf_exempt
 def logout_view(request):
@@ -179,6 +207,7 @@ def getCafes(request):
 
     response = {
         "cafes": cafes_data,
+        "count": len(cafes)
     }
     return JsonResponse(response, status=200, safe=False)
 
@@ -228,7 +257,10 @@ def removeCafe(request):
     cafeteriaUserProfile = Profile.objects.get(user = cafeteriaUser)
     if(cafeteriaUserProfile.user_type == 3):
         data = json.loads(request.body)
-        cafe = Cafe.objects.get(pk=int(data["cafe"]))
+        try:
+            cafe = Cafe.objects.get(pk=int(data["cafe"]))
+        except:
+            return JsonResponse({"status": "Cafe Doesn't Exist"}, status=200)
         cafeteria = Cafeteria.objects.get(pk = int(cafeteriaUserProfile.request_id))
 
         if(cafe.cafeteria == cafeteria):
@@ -239,7 +271,11 @@ def removeCafe(request):
 @csrf_exempt
 def updateCafe(request): 
     cafeteriaUser = User.objects.get(username=request.session['username'])
-    cafeteriaUserProfile = Profile.objects.get(user = cafeteriaUser)
+    try:
+        cafeteriaUserProfile = Profile.objects.get(user = cafeteriaUser)
+    except:
+        JsonResponse({"status": "Cafeteria UserProfile User Doesn't Exist"}, status=200)  
+
     if(cafeteriaUserProfile.user_type == 3):
         data = json.loads(request.body)
         cafe = Cafe.objects.get(pk=int(data["cafe"]))
@@ -460,9 +496,10 @@ def orderItems(request):
             else:
                 return JsonResponse({"status": "Food Item Not Available."}, status=200)  
         print ingredientsTemp
-        flag = 0
+        
         canBeMade = 1
         for each in items:
+            flag = 0
             foodItem = FoodItem.objects.get(pk=each["id"])
             totalRequiredQuantity = int(each["quantity"]) #foodItems order quntity 
             maximumPossibleCanBeMade = 0
@@ -471,7 +508,7 @@ def orderItems(request):
             for ingredient in ingredientsRequired:
                 ingridientDetail = IngridientDetail.objects.get(foodItem = foodItem, ingredient = ingredient)
                 ingredientQuantity = ingridientDetail.quantity #for making foodItem , to make 
-                if(ingredientsTemp[ingredient.pk] > ingredientQuantity):
+                if(ingredientsTemp[ingredient.pk] >= ingredientQuantity):
                     maxsofar = int(ingredientsTemp[ingredient.pk]/ingredientQuantity)
                     if(flag==0):
                         maximumPossibleCanBeMade = maxsofar
@@ -527,6 +564,7 @@ def orderItems(request):
                         cafe = cafe,
                         note = note,
                         price = price,
+                        order_status = 1,
                     )
         order.save()
 
@@ -542,7 +580,7 @@ def orderItems(request):
                 )
             orderDetail.save()
         # order.foodItems.add(*foodItems)
-        return JsonResponse({"status": "Items Ordered Successfully", "orderId": order.pk, "orderPrice": price}, status=200)
+        return JsonResponse({"status": "Items Ordered Successfully", "orderId": order.pk, "orderPrice": price, "order_status": ORDER_STATUS[0][1]}, status=200)
     else:
         return JsonResponse({"status": "You dont have required permissions."}, status=200)  
 
@@ -606,3 +644,25 @@ def getOrders(request):
         return JsonResponse({"cafeteriaOrders": cafeteriaOrders}, status=200)  
     
     return JsonResponse({"status": "You dont have required permissions."}, status=200)  
+
+@csrf_exempt
+def addIngredient(request):
+    cafeteriaUser = User.objects.get(username=request.session['username'])
+    cafeteriaUserProfile = Profile.objects.get(user = cafeteriaUser)
+    if(cafeteriaUserProfile.user_type == 3):
+        cafeteria = Cafeteria.objects.get(pk=int(cafeteriaUserProfile.request_id))
+        storeHouse = StoreHouse.objects.get(cafeteria = cafeteria)
+
+        data = json.loads(request.body)
+        ingredients = Ingredients(
+                    storeHouse = storeHouse,
+                    name=data["name"],
+                    quantity_type = data["quantity_type"],
+                    availableQuantity = data["availableQuantity"],
+                    description=data["description"],
+                )
+        ingredients.save()
+
+        return JsonResponse({"status": "Ingredient Added Successfully", "ingredientsId": ingredients.pk, "ingredientsName": ingredients.name}, status=200)
+    else:
+        return JsonResponse({"status": "You dont have required permissions."}, status=200)  

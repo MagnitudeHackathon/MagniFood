@@ -94,7 +94,7 @@ class Category(models.Model):
 
 class StoreHouse(models.Model):
     name  = models.CharField(max_length=150, null=True,blank=True)
-    cafeteria = models.ForeignKey(Cafeteria, on_delete=models.CASCADE)
+    cafeteria = models.OneToOneField(Cafeteria, on_delete=models.CASCADE)
     def __str__(self):
         return self.name
 
