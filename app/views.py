@@ -19,6 +19,8 @@ from django.contrib.auth.models import User
 from django.contrib.auth import authenticate, login, logout
 from django.views.decorators.csrf import csrf_exempt
 
+from django.core.exceptions import ValidationError
+from django.core.validators import validate_email
 
 @csrf_exempt
 def login_view(request):
@@ -48,7 +50,7 @@ def logout_view(request):
     except:
         pass
     logout(request)
-    return JsonResponse({'error':False})
+    return JsonResponse({'status':"Logout Successful"})
 
 @csrf_exempt
 def signup_view(request):
@@ -63,14 +65,16 @@ def signup_view(request):
         first_name = data['first_name']
         last_name = data['last_name']
         email = data['email']
+        try:
+            validate_email(email)
+        except ValidationError as e:
+            return JsonResponse({"status": "Invalid Email."}, status=200)  
+        
         employeeId = data['employeeId']
         contactNumber = int(data['contactNumber'])
         
-        
         workplace = data['workplace']
         
-
-
         user_type = int(data['userType'])
 
         if(user_type == 1):
@@ -146,7 +150,11 @@ def getCafeterias(request):
 
 @csrf_exempt
 def getCafeteria(request, cafeteriaId):
-    cafeteria = Cafeteria.objects.get(pk=cafeteriaId)
+    try:
+        cafeteria = Cafeteria.objects.get(pk=cafeteriaId)
+    except:
+        return JsonResponse({"status": "Cafeteria Doesn't Exist!!!"}, status=200)  
+
     response = {
         "id": cafeteria.pk,
         "name": cafeteria.name,
@@ -180,20 +188,24 @@ def getCafe(request, cafeId):
     
     try: 
         cafe = Cafe.objects.get(pk=cafeId)
-        response = {
-            "id": cafe.pk,
-            "name": cafe.name,
-            "cafeteriaName": cafe.cafeteria.name,
-            "block": cafe.cafeteria.address.block,
-            "floor": cafe.cafeteria.address.floor,
-        }
-        return JsonResponse(response, status=200, safe=False)
     except:
         return JsonResponse({"status": "Cafe Doesn't Exists."}, status=200, safe=False)
+    response = {
+        "id": cafe.pk,
+        "name": cafe.name,
+        "cafeteriaName": cafe.cafeteria.name,
+        "block": cafe.cafeteria.address.block,
+        "floor": cafe.cafeteria.address.floor,
+    }
+    return JsonResponse(response, status=200, safe=False)
+    
 
 @csrf_exempt
 def addCafe(request):
-    cafeteriaUser = User.objects.get(username=request.session['username'])
+    try:
+        cafeteriaUser = User.objects.get(username=request.session['username'])
+    except:
+        return JsonResponse({"status": "Session Invalid"}, status=200, safe=False)
     cafeteriaUserProfile = Profile.objects.get(user = cafeteriaUser)
     if(cafeteriaUserProfile.user_type == 3):
         data = json.loads(request.body)
@@ -294,7 +306,7 @@ def getItems(request):
             "category": each.category.name,
             "cafe": each.cafe.name,
             "cafeteria": each.cafe.cafeteria.name,
-            "availableQuantity": each.availableQuantity,
+            "available": each.available,
         }
         items_data.append(data)
 
@@ -320,7 +332,7 @@ def getItem(request, itemId):
         "category": foodItem.category.name,
         "cafe": foodItem.cafe.name,
         "cafeteria": foodItem.cafe.cafeteria.name,
-        "availableQuantity": foodItem.availableQuantity,
+        "available": foodItem.available,
 
     }
 
@@ -334,16 +346,28 @@ def addItem(request):
         print("cafeUserProfile.request_id:", cafeUserProfile.request_id)
         cafe = Cafe.objects.get(pk=int(cafeUserProfile.request_id))
         data = json.loads(request.body)
+        
+         
         category = Category.objects.get(pk = int(data["category"]))
         foodItem = FoodItem(
                     name=data["name"],
                     price=data["price"],
-                    availableQuantity = data["availableQuantity"],
                     description=data["description"],
                     category = category,
                     cafe=cafe,
                 )
         foodItem.save()
+        
+        ingridients = data["ingredients"]
+        for each in ingridients:
+            ingredient = Ingredients.objects.get(pk = int(each["id"]))
+            ingridientDetail = IngridientDetail(
+                quantity = each["quantity"],
+                foodItem = foodItem, 
+                ingredient = ingredient
+                )
+            ingridientDetail.save()
+
         return JsonResponse({"status": "FoodItem Added Successfully", "foodItemId": foodItem.pk, "foodItemName": foodItem.name}, status=200)
     else:
         return JsonResponse({"status": "You dont have required permissions."}, status=200)  
@@ -386,7 +410,6 @@ def updateItem(request):
         if(foodItem.cafe == cafe):
             foodItem.name = data["name"]
             foodItem.price = data["price"]
-            foodItem.availableQuantity = data["availableQuantity"]
             foodItem.description = data["description"]
             foodItem.category = Category.objects.get(pk = int(data["category"]))
             foodItem.save()
@@ -400,7 +423,6 @@ def updateItem(request):
                 "category": foodItem.category.name,
                 "cafe": foodItem.cafe.name,
                 "cafeteria": foodItem.cafe.cafeteria.name,
-                "availableQuantity": foodItem.availableQuantity,
                 }, status=200)
     return JsonResponse({"status": "You dont have required permissions."}, status=200)  
 
@@ -420,33 +442,85 @@ def orderItems(request):
         items = data["items"]
         foodItems = []
         price = 0
-        notAvailable = []
+        foodItemsNotAvailable = []
+        foodItemsAvailable = []
+        ingredientsTemp = {}
+        totalRequiredQuantity = 0
+        for each in items:
+            foodItem = FoodItem.objects.get(pk=int(each["id"]))
+            if foodItem is not None:
+                totalRequiredQuantity = int(each["quantity"]) #foodItems order quntity 
+                ingredientsRequired = foodItem.ingridients.all()
+                print ingredientsRequired, "indadsa "
+                for ingredient in ingredientsRequired:
+                    ingridientDetail = IngridientDetail.objects.get(foodItem = foodItem, ingredient = ingredient)
+                    ingredientQuantity = ingridientDetail.quantity #for making foodItem , to make 
+                    ingredientsTemp.setdefault(ingredient.pk,"")
+                    ingredientsTemp[ingredient.pk] = ingredient.availableQuantity
+            else:
+                return JsonResponse({"status": "Food Item Not Available."}, status=200)  
+        print ingredientsTemp
+        flag = 0
+        canBeMade = 1
         for each in items:
             foodItem = FoodItem.objects.get(pk=each["id"])
-            if foodItem is not None:
-                quantity = int(each["quantity"])
-                if (quantity > foodItem.availableQuantity):
-                    notAvailable.append(foodItem)
+            totalRequiredQuantity = int(each["quantity"]) #foodItems order quntity 
+            maximumPossibleCanBeMade = 0
+            
+            ingredientsRequired = foodItem.ingridients.all()
+            for ingredient in ingredientsRequired:
+                ingridientDetail = IngridientDetail.objects.get(foodItem = foodItem, ingredient = ingredient)
+                ingredientQuantity = ingridientDetail.quantity #for making foodItem , to make 
+                if(ingredientsTemp[ingredient.pk] > ingredientQuantity):
+                    maxsofar = int(ingredientsTemp[ingredient.pk]/ingredientQuantity)
+                    if(flag==0):
+                        maximumPossibleCanBeMade = maxsofar
+                        flag = 1
+                    else:
+                        maximumPossibleCanBeMade = min(maximumPossibleCanBeMade, maxsofar)
+                    
+                    if(maximumPossibleCanBeMade >= totalRequiredQuantity):
+                        maximumPossibleCanBeMade = totalRequiredQuantity
+                
+                if (maximumPossibleCanBeMade < totalRequiredQuantity):
+                    canBeMade = 0
+                
+                ingredientsTemp[ingredient.pk] = ingredientsTemp[ingredient.pk] - (maximumPossibleCanBeMade*ingredientQuantity)
+            
+            foodItemsAvailable.append({"name":foodItem.name,"Quantity" : maximumPossibleCanBeMade})    
+            foodItemsNotAvailable.append({"name":foodItem.name,"Quantity" : totalRequiredQuantity -  maximumPossibleCanBeMade})
 
-                    # return JsonResponse({"status": foodItem.name + " quantity required is not available."}, status=200)
-                price = price + quantity * foodItem.price
-                foodItems.append(foodItem)
 
-            else:
-                return JsonResponse({"status": "Food Item(s) Doesn't Exists"}, status=200)
+        ######################################################################
+        if(canBeMade == 0):
+            return JsonResponse({"status": "Insufficient Ingredients","foodItemsAvailable": foodItemsAvailable, "foodItemsNotAvailable": foodItemsNotAvailable }, status=200)
+
+
+        ######################################################################
+        print ingredientsTemp
+        for key in ingredientsTemp.iterkeys():
+            ingredient = Ingredients.objects.get(pk = key)
+            ingredient.availableQuantity = ingredientsTemp[key]
+            ingredient.save()
+            foodItems = FoodItem.objects.all()
+            for foodItem in foodItems:
+                try:
+                    ingridientDetail = IngridientDetail.objects.get(foodItem = foodItem, ingredient = ingredient)
+                
+                    quantity = ingridientDetail.quantity
+                    if(quantity <= ingredientsTemp[key]):
+                        foodItem.available = True
+                    else:
+                        foodItem.available = False
+                    foodItem.save()
+                except:
+                    continue
         
-        if(len(notAvailable) != 0):
-            NAList = ""
-            for each in notAvailable:
-                NAList = NAList + each.name +", "
-            NAList = NAList[:-2]
-            return JsonResponse({"status": NAList + " quantity required is not available."}, status=200)
-
         for each in items:
             foodItem = FoodItem.objects.get(pk=each["id"])
             quantity = int(each["quantity"])
-            foodItem.availableQuantity = foodItem.availableQuantity - quantity
-            foodItem.save()
+            price  = price + (quantity*foodItem.price)
+            
 
         order = Order(
                         customer = customer,
@@ -502,4 +576,33 @@ def getOrders(request):
             cafeOrders.append(data)
         print("cafeOrders", cafeOrders)
         return JsonResponse({"cafeOrders": cafeOrders}, status=200)  
+    elif(userProfile.user_type == 3):
+        cafeteria = Cafeteria.objects.get(pk = int(userProfile.request_id))
+        cafes = Cafe.objects.filter(cafeteria = cafeteria)
+        cafeteriaOrders = []
+        for cafe in cafes:
+            cafeData = []
+            orders = Order.objects.filter(cafe = cafe)
+            for each in orders:
+                items = []
+                for foodItem in each.foodItems.all():
+                    orderDetail = OrderDetail.objects.get(order = each, foodItem = foodItem)
+                    items.append({"name":foodItem.name, "quantity": orderDetail.quantity, "price": orderDetail.price})
+
+                data = {
+                    "customer": each.customer.first_name,
+                    "cafe": each.cafe.name,
+                    "order_status": ORDER_STATUS[int(each.order_status)][1],
+                    "price": each.price,
+                    "note": each.note,
+                    "foodItems": items,
+                }
+                cafeData.append(data)
+            cafeDataValues = {
+                "CafeName" : cafe.name,
+                "CafeOrders" : cafeData
+            }
+            cafeteriaOrders.append(cafeDataValues)
+        return JsonResponse({"cafeteriaOrders": cafeteriaOrders}, status=200)  
+    
     return JsonResponse({"status": "You dont have required permissions."}, status=200)  
