@@ -18,6 +18,7 @@ urlpatterns = [
 
     url(r'^getCafes/$', views.getCafes, name="getCafes"),
     url(r'^getCafe/(?P<cafeId>\d+)/$', views.getCafe, name="getCafe"),
+    
     url(r'^addCafe/$', views.addCafe, name="addCafe"),
     url(r'^removeCafe/$', views.removeCafe, name="removeCafe"),
     url(r'^updateCafe/$', views.updateCafe, name="updateCafe"),
@@ -29,6 +30,8 @@ urlpatterns = [
     url(r'^addItem/$', views.addItem, name="addItem"),
     url(r'^removeItem/$', views.removeItem, name="removeItem"),
     url(r'^updateItem/$', views.updateItem, name="updateItem"),
+
     url(r'^orderItems/$', views.orderItems, name="orderItems"),
+    url(r'^getOrders/$', views.getOrders, name="getOrders"),
 
 ]

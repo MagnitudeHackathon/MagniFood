@@ -209,7 +209,10 @@ def addCafe(request):
 
 @csrf_exempt
 def removeCafe(request):
-    cafeteriaUser = User.objects.get(username=request.session['username'])
+    try:
+        cafeteriaUser = User.objects.get(username=request.session['username'])
+    except:
+        return JsonResponse({"status": "Invalid Session."}, status=200)  
     cafeteriaUserProfile = Profile.objects.get(user = cafeteriaUser)
     if(cafeteriaUserProfile.user_type == 3):
         data = json.loads(request.body)
@@ -304,7 +307,11 @@ def getItems(request):
 
 @csrf_exempt
 def getItem(request, itemId):
-    foodItem = FoodItem.objects.get(pk=itemId)
+    try:
+        foodItem = FoodItem.objects.get(pk=itemId)
+    except:
+        return JsonResponse({"status": "FoodItem Doesn't Exists"}, status=200)
+
     response = {
         "itemId": foodItem.pk,
         "name": foodItem.name,
@@ -343,7 +350,10 @@ def addItem(request):
 
 @csrf_exempt
 def removeItem(request):
-    cafeUser = User.objects.get(username=request.session['username'])
+    try:
+        cafeUser = User.objects.get(username=request.session['username'])
+    except:
+        return JsonResponse({"status": "Invalid UserSession"}, status=200)
     cafeUserProfile = Profile.objects.get(user = cafeUser)
     if(cafeUserProfile.user_type == 1):
         data = json.loads(request.body)
@@ -445,9 +455,47 @@ def orderItems(request):
                         price = price,
                     )
         order.save()
-        order.foodItems.add(*foodItems)
+
+        for each in items:
+            quantity = int(each["quantity"])
+
+            foodItem = FoodItem.objects.get(pk=each["id"])
+            orderDetail = OrderDetail(
+                quantity = quantity,
+                price = foodItem.price, 
+                foodItem = foodItem, 
+                order = order
+                )
+            orderDetail.save()
+        # order.foodItems.add(*foodItems)
         return JsonResponse({"status": "Items Ordered Successfully", "orderId": order.pk, "orderPrice": price}, status=200)
     else:
         return JsonResponse({"status": "You dont have required permissions."}, status=200)  
-    
-    
+
+@csrf_exempt
+def getOrders(request): 
+    user = User.objects.get(username=request.session['username'])
+    userProfile = Profile.objects.get(user = user)
+    if(userProfile.user_type == 1):
+        cafe = Cafe.objects.get(pk = int(userProfile.request_id))
+        orders = Order.objects.filter(cafe = cafe)
+
+        cafeOrders = []
+        for each in orders:
+            items = []
+            for foodItem in each.foodItems.all():
+                orderDetail = OrderDetail.objects.get(order = each, foodItem = foodItem)
+                items.append({"name":foodItem.name, "quantity": orderDetail.quantity, "price": orderDetail.price})
+
+            data = {
+                "customer": each.customer.first_name,
+                "cafe": each.cafe.name,
+                "order_status": ORDER_STATUS[int(each.order_status)][1],
+                "price": each.price,
+                "note": each.note,
+                "foodItems": items,
+            }
+            cafeOrders.append(data)
+        print("cafeOrders", cafeOrders)
+        return JsonResponse({"cafeOrders": cafeOrders}, status=200)  
+    return JsonResponse({"status": "You dont have required permissions."}, status=200)  
