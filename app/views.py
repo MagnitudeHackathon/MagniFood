@@ -473,8 +473,12 @@ def orderItems(request):
         return JsonResponse({"status": "You dont have required permissions."}, status=200)  
 
 @csrf_exempt
-def getOrders(request): 
-    user = User.objects.get(username=request.session['username'])
+def getOrders(request):
+    try: 
+        user = User.objects.get(username=request.session['username'])
+    except:
+        return JsonResponse({"status": "Invalid Session."}, status=200)  
+
     userProfile = Profile.objects.get(user = user)
     if(userProfile.user_type == 1):
         cafe = Cafe.objects.get(pk = int(userProfile.request_id))
